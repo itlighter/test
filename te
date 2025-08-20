@@ -7,7 +7,7 @@ local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local HttpService = game:GetService("HttpService")
 
 -- ===== Discord Webhook URL =====
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1406862075988545658/a7sM5kebE9xUS_CNlWrPlwMOI-PLY3pZmKltgjfrsy4239Ee-RKLXYuX33DUWMGkby74" -- ganti dengan webhook lo
+local WEBHOOK_URL = "https://discord.com/api/webhooks/WEBHOOK_ID/WEBHOOK_TOKEN" -- ganti dengan webhook lo
 
 -- ===== Function kirim ke Discord =====
 local function sendToDiscord(text)
@@ -25,7 +25,10 @@ local function sendToDiscord(text)
 end
 
 -- ===== Function untuk notifikasi lokal =====
+local enablePopup = false -- set ke false kalau AFK
 local function NotifyLocal(message)
+    if not enablePopup then return end
+
     -- Print ke console
     print("⚡ Mention detected: " .. message)
 
@@ -74,14 +77,31 @@ if chatRemote then
     end)
 end
 
--- ===== Monitor GUI chat TextLabels =====
-local chatFrame = PlayerGui:FindFirstChild("ChatFrame")
-if chatFrame then
-    chatFrame.DescendantAdded:Connect(function(child)
-        if child:IsA("TextLabel") and child.Text:lower():find(PlayerName:lower()) then
-            Notify("Unknown (GUI)", child.Text)
+-- ===== Monitor semua TextLabel di GUI =====
+local function monitorGui(gui)
+    gui.DescendantAdded:Connect(function(child)
+        if child:IsA("TextLabel") then
+            -- Debug print
+            print("Detected TextLabel: " .. child.Text)
+            if child.Text:lower():find(PlayerName:lower()) then
+                Notify("Unknown (GUI)", child.Text)
+            end
         end
     end)
 end
 
-print("✅ Mention monitor active for player: " .. PlayerName)
+-- Scan semua ScreenGui di PlayerGui
+for _, gui in pairs(PlayerGui:GetChildren()) do
+    if gui:IsA("ScreenGui") then
+        monitorGui(gui)
+    end
+end
+
+-- Tambah listener untuk ScreenGui baru yang muncul
+PlayerGui.ChildAdded:Connect(function(gui)
+    if gui:IsA("ScreenGui") then
+        monitorGui(gui)
+    end
+end)
+
+print("✅ AFK-ready mention monitor active for player: " .. PlayerName)
