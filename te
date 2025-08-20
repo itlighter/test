@@ -1,5 +1,5 @@
 -- CONFIG
-local WEBHOOK_URL = "PASTE_DISCORD_WEBHOOK_HERE"
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1406862075988545658/a7sM5kebE9xUS_CNlWrPlwMOI-PLY3pZmKltgjfrsy4239Ee-RKLXYuX33DUWMGkby74"
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
