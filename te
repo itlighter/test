@@ -1,1 +1,122 @@
-tes
+-- CONFIG
+local WEBHOOK_URL = "PASTE_DISCORD_WEBHOOK_HERE"
+
+local HttpService = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local PlayerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+
+-- Queue untuk batching
+local queue = {}
+local debounce = false
+
+local function sendToDiscord(text)
+    local req = (http_request or request or syn.request)
+    req({
+        Url = WEBHOOK_URL,
+        Method = "POST",
+        Headers = {["Content-Type"]="application/json"},
+        Body = HttpService:JSONEncode({content=text})
+    })
+end
+
+local function enqueue(msg)
+    table.insert(queue, msg)
+    if not debounce then
+        debounce = true
+        wait(1) -- kirim tiap 1 detik
+        sendToDiscord(table.concat(queue, "\n\n"))
+        queue = {}
+        debounce = false
+    end
+end
+
+-- Timestamp helper
+local function timestamp()
+    return os.date("%Y-%m-%d %H:%M:%S")
+end
+
+-- Listen RemoteEvent
+local function listenRemoteEvent(remote, location)
+    remote.OnClientEvent:Connect(function(...)
+        local args = {...}
+        local safeArgs = {}
+        for i,v in ipairs(args) do
+            if typeof(v) == "string" or typeof(v) == "number" or typeof(v) == "boolean" then
+                table.insert(safeArgs, v)
+            else
+                table.insert(safeArgs, tostring(v))
+            end
+        end
+
+        local msg = string.format(
+            "**RemoteEvent Fired:** %s\nLocation: %s\nTime: %s\nArgs: %s",
+            remote:GetFullName(),
+            location,
+            timestamp(),
+            HttpService:JSONEncode(safeArgs)
+        )
+        enqueue(msg)
+    end)
+end
+
+-- Listen RemoteFunction
+local function listenRemoteFunction(rfunc, location)
+    local oldInvoke = rfunc.OnClientInvoke
+    rfunc.OnClientInvoke = function(...)
+        local args = {...}
+        local safeArgs = {}
+        for i,v in ipairs(args) do
+            if typeof(v) == "string" or typeof(v) == "number" or typeof(v) == "boolean" then
+                table.insert(safeArgs, v)
+            else
+                table.insert(safeArgs, tostring(v))
+            end
+        end
+
+        local msg = string.format(
+            "**RemoteFunction Invoked:** %s\nLocation: %s\nTime: %s\nArgs: %s",
+            rfunc:GetFullName(),
+            location,
+            timestamp(),
+            HttpService:JSONEncode(safeArgs)
+        )
+        enqueue(msg)
+
+        if oldInvoke then
+            return oldInvoke(...)
+        end
+    end
+end
+
+-- Lokasi untuk scan
+local locations = {
+    {name="ReplicatedStorage", obj=ReplicatedStorage},
+    {name="Workspace", obj=Workspace},
+    {name="PlayerGui", obj=PlayerGui}
+}
+
+-- Fungsi scan & hook
+for _, loc in ipairs(locations) do
+    local function scan(obj)
+        for _, item in ipairs(obj:GetDescendants()) do
+            if item:IsA("RemoteEvent") then
+                listenRemoteEvent(item, loc.name)
+            elseif item:IsA("RemoteFunction") then
+                listenRemoteFunction(item, loc.name)
+            end
+        end
+    end
+
+    -- Scan awal
+    scan(loc.obj)
+
+    -- Detect baru spawn
+    loc.obj.DescendantAdded:Connect(function(obj)
+        if obj:IsA("RemoteEvent") then
+            listenRemoteEvent(obj, loc.name)
+        elseif obj:IsA("RemoteFunction") then
+            listenRemoteFunction(obj, loc.name)
+        end
+    end)
+end
