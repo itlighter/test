@@ -1,140 +1,87 @@
--- CONFIG
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1406862075988545658/a7sM5kebE9xUS_CNlWrPlwMOI-PLY3pZmKltgjfrsy4239Ee-RKLXYuX33DUWMGkby74"
-
-local HttpService = game:GetService("HttpService")
+-- ===== Setup =====
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local PlayerName = LocalPlayer.Name
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
-local PlayerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local HttpService = game:GetService("HttpService")
 
--- Queue untuk batching
-local queue = {}
-local debounce = false
+-- ===== Discord Webhook URL =====
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1406862075988545658/a7sM5kebE9xUS_CNlWrPlwMOI-PLY3pZmKltgjfrsy4239Ee-RKLXYuX33DUWMGkby74" -- ganti dengan webhook lo
 
+-- ===== Function kirim ke Discord =====
 local function sendToDiscord(text)
     local req = (http_request or request or syn.request)
-    req({
-        Url = WEBHOOK_URL,
-        Method = "POST",
-        Headers = {["Content-Type"]="application/json"},
-        Body = HttpService:JSONEncode({content=text})
-    })
-end
-
-local function enqueue(msg)
-    table.insert(queue, msg)
-    if not debounce then
-        debounce = true
-        wait(1) -- kirim tiap 1 detik
-        sendToDiscord(table.concat(queue, "\n\n"))
-        queue = {}
-        debounce = false
+    if req then
+        req({
+            Url = WEBHOOK_URL,
+            Method = "POST",
+            Headers = {["Content-Type"]="application/json"},
+            Body = HttpService:JSONEncode({content=text})
+        })
+    else
+        warn("No HTTP request function available!")
     end
 end
 
--- Timestamp helper
-local function timestamp()
-    return os.date("%Y-%m-%d %H:%M:%S")
-end
+-- ===== Function untuk notifikasi lokal =====
+local function NotifyLocal(message)
+    -- Print ke console
+    print("⚡ Mention detected: " .. message)
 
--- Partial Blacklist Remotes (keyword match)
-local blacklist = {
-    "TweenServicePlus.SyncedTime.TimeSyncEvent"
-}
+    -- Sound notifikasi
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://138087587" -- contoh sound
+    sound.Volume = 1
+    sound.Parent = workspace
+    sound:Play()
 
-local function isBlacklisted(fullName)
-    for _, keyword in ipairs(blacklist) do
-        if string.find(fullName, keyword) then
-            return true
-        end
-    end
-    return false
-end
+    -- GUI popup
+    local screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "MentionPopup"
+    screenGui.Parent = PlayerGui
 
--- Listen RemoteEvent
-local function listenRemoteEvent(remote, location)
-    remote.OnClientEvent:Connect(function(...)
-        if isBlacklisted(remote:GetFullName()) then return end  -- skip blacklist
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(0, 300, 0, 50)
+    textLabel.Position = UDim2.new(0.5, -150, 0.1, 0)
+    textLabel.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textLabel.Font = Enum.Font.SourceSansBold
+    textLabel.TextSize = 24
+    textLabel.Text = "⚡ Mentioned: " .. message
+    textLabel.Parent = screenGui
 
-        local args = {...}
-        local safeArgs = {}
-        for i,v in ipairs(args) do
-            if typeof(v) == "string" or typeof(v) == "number" or typeof(v) == "boolean" then
-                table.insert(safeArgs, v)
-            else
-                table.insert(safeArgs, tostring(v))
-            end
-        end
-
-        local msg = string.format(
-            "**RemoteEvent Fired:** %s\nLocation: %s\nTime: %s\nArgs: %s",
-            remote:GetFullName(),
-            location,
-            timestamp(),
-            HttpService:JSONEncode(safeArgs)
-        )
-        enqueue(msg)
+    -- Hapus popup setelah 3 detik
+    delay(3, function()
+        screenGui:Destroy()
+        sound:Destroy()
     end)
 end
 
--- Listen RemoteFunction
-local function listenRemoteFunction(rfunc, location)
-    local oldInvoke = rfunc.OnClientInvoke
-    rfunc.OnClientInvoke = function(...)
-        if isBlacklisted(rfunc:GetFullName()) then return end  -- skip blacklist
-
-        local args = {...}
-        local safeArgs = {}
-        for i,v in ipairs(args) do
-            if typeof(v) == "string" or typeof(v) == "number" or typeof(v) == "boolean" then
-                table.insert(safeArgs, v)
-            else
-                table.insert(safeArgs, tostring(v))
-            end
-        end
-
-        local msg = string.format(
-            "**RemoteFunction Invoked:** %s\nLocation: %s\nTime: %s\nArgs: %s",
-            rfunc:GetFullName(),
-            location,
-            timestamp(),
-            HttpService:JSONEncode(safeArgs)
-        )
-        enqueue(msg)
-
-        if oldInvoke then
-            return oldInvoke(...)
-        end
-    end
+-- ===== Gabung notifikasi =====
+local function Notify(senderName, message)
+    NotifyLocal(message)
+    sendToDiscord("Mention detected in Roblox!\nPlayer: " .. senderName .. "\nMessage: " .. message)
 end
 
--- Lokasi untuk scan
-local locations = {
-    {name="ReplicatedStorage", obj=ReplicatedStorage},
-    {name="Workspace", obj=Workspace},
-    {name="PlayerGui", obj=PlayerGui}
-}
-
--- Fungsi scan & hook
-for _, loc in ipairs(locations) do
-    local function scan(obj)
-        for _, item in ipairs(obj:GetDescendants()) do
-            if item:IsA("RemoteEvent") then
-                listenRemoteEvent(item, loc.name)
-            elseif item:IsA("RemoteFunction") then
-                listenRemoteFunction(item, loc.name)
-            end
-        end
-    end
-
-    -- Scan awal
-    scan(loc.obj)
-
-    -- Detect baru spawn
-    loc.obj.DescendantAdded:Connect(function(obj)
-        if obj:IsA("RemoteEvent") then
-            listenRemoteEvent(obj, loc.name)
-        elseif obj:IsA("RemoteFunction") then
-            listenRemoteFunction(obj, loc.name)
+-- ===== Monitor RemoteEvent chat (jika ada) =====
+local chatRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("ChatMessage")
+if chatRemote then
+    chatRemote.OnClientEvent:Connect(function(sender, message)
+        if message:lower():find(PlayerName:lower()) then
+            Notify(sender.Name, message)
         end
     end)
 end
+
+-- ===== Monitor GUI chat TextLabels =====
+local chatFrame = PlayerGui:FindFirstChild("ChatFrame")
+if chatFrame then
+    chatFrame.DescendantAdded:Connect(function(child)
+        if child:IsA("TextLabel") and child.Text:lower():find(PlayerName:lower()) then
+            Notify("Unknown (GUI)", child.Text)
+        end
+    end)
+end
+
+print("✅ Mention monitor active for player: " .. PlayerName)
