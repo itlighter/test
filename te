@@ -36,9 +36,16 @@ local function timestamp()
     return os.date("%Y-%m-%d %H:%M:%S")
 end
 
+-- Blacklist Remotes yang spamming
+local blacklist = {
+    ["ReplicatedStorage.Modules.Utility.TweenServicePlus.SyncedTime.TimeSyncEvent"] = true
+}
+
 -- Listen RemoteEvent
 local function listenRemoteEvent(remote, location)
     remote.OnClientEvent:Connect(function(...)
+        if blacklist[remote:GetFullName()] then return end  -- skip blacklist
+
         local args = {...}
         local safeArgs = {}
         for i,v in ipairs(args) do
@@ -64,6 +71,8 @@ end
 local function listenRemoteFunction(rfunc, location)
     local oldInvoke = rfunc.OnClientInvoke
     rfunc.OnClientInvoke = function(...)
+        if blacklist[rfunc:GetFullName()] then return end  -- skip blacklist
+
         local args = {...}
         local safeArgs = {}
         for i,v in ipairs(args) do
