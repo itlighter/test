@@ -1,10 +1,32 @@
 --// Config
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1406862075988545658/a7sM5kebE9xUS_CNlWrPlwMOI-PLY3pZmKltgjfrsy4239Ee-RKLXYuX33DUWMGkby74"
 
-
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+
+--// Resolve Finder UserId -> Username
+local function resolveFinder(userId)
+    -- cek apakah player ada di server
+    local player = Players:GetPlayerByUserId(userId)
+    if player then
+        return string.format("%s (UserId: %d)", player.Name, userId)
+    end
+
+    -- kalau ga ada di server, coba request ke API Roblox
+    local success, result = pcall(function()
+        local url = "https://users.roblox.com/v1/users/"..userId
+        local response = game:HttpGet(url)
+        local data = HttpService:JSONDecode(response)
+        return data.name
+    end)
+
+    if success and result then
+        return string.format("%s (UserId: %d)", result, userId)
+    end
+
+    return string.format("UserId: %d", userId)
+end
 
 --// Utility format argumen
 local function formatValue(v)
@@ -18,8 +40,15 @@ local function formatValue(v)
     elseif t == "Color3" then
         return string.format("[Color3: R=%.2f G=%.2f B=%.2f]", v.R, v.G, v.B)
     elseif t == "table" then
-        local ok, json = pcall(function() return HttpService:JSONEncode(v) end)
-        return ok and json or "[Table]"
+        local parts = {}
+        for k, v2 in pairs(v) do
+            if k == "Finder" and typeof(v2) == "number" then
+                table.insert(parts, string.format("%s = %s", tostring(k), resolveFinder(v2)))
+            else
+                table.insert(parts, string.format("%s = %s", tostring(k), formatValue(v2)))
+            end
+        end
+        return "{ " .. table.concat(parts, ", ") .. " }"
     elseif t == "function" then
         return "[Function]"
     elseif t == "userdata" then
@@ -50,7 +79,8 @@ local function sendToDiscord(sourceName, obj, args, type)
         embeds = {{
             title = string.format("[%s] %s", sourceName, obj:GetFullName()),
             description = "```lua\n"..formatArgs(args).."\n```",
-            color = colors[type] or 0
+            color = colors[type] or 0,
+            timestamp = DateTime.now():ToIsoDate()
         }}
     }
 
