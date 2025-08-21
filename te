@@ -1,107 +1,90 @@
--- ===== Setup =====
+--// Config
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1406862075988545658/a7sM5kebE9xUS_CNlWrPlwMOI-PLY3pZmKltgjfrsy4239Ee-RKLXYuX33DUWMGkby74"
+
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
-local PlayerName = LocalPlayer.Name
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-local HttpService = game:GetService("HttpService")
 
--- ===== Discord Webhook URL =====
-local WEBHOOK_URL = "https://discord.com/api/webhooks/WEBHOOK_ID/WEBHOOK_TOKEN" -- ganti dengan webhook lo
+--// Fungsi kirim ke Discord
+local function sendToDiscord(sourceName, obj, args)
+    local data = {
+        username = "Remote Logger",
+        content = string.format(
+            "**[%s] %s**\n```lua\n%s\n```",
+            sourceName,
+            obj:GetFullName(),
+            HttpService:JSONEncode(args)
+        )
+    }
 
--- ===== Function kirim ke Discord =====
-local function sendToDiscord(text)
-    local req = (http_request or request or syn.request)
-    if req then
-        req({
+    local body = HttpService:JSONEncode(data)
+    local request = (http_request or request or syn.request)
+    if request then
+        request({
             Url = WEBHOOK_URL,
             Method = "POST",
-            Headers = {["Content-Type"]="application/json"},
-            Body = HttpService:JSONEncode({content=text})
+            Headers = {["Content-Type"] = "application/json"},
+            Body = body
         })
-    else
-        warn("No HTTP request function available!")
     end
 end
 
--- ===== Function untuk notifikasi lokal =====
-local enablePopup = false -- set ke false kalau AFK
-local function NotifyLocal(message)
-    if not enablePopup then return end
+--// Blacklist supaya ga spam
+local blacklist = {
+    "TimeSyncEvent", -- contohnya
+}
 
-    -- Print ke console
-    print("⚡ Mention detected: " .. message)
-
-    -- Sound notifikasi
-    local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://138087587" -- contoh sound
-    sound.Volume = 1
-    sound.Parent = workspace
-    sound:Play()
-
-    -- GUI popup
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "MentionPopup"
-    screenGui.Parent = PlayerGui
-
-    local textLabel = Instance.new("TextLabel")
-    textLabel.Size = UDim2.new(0, 300, 0, 50)
-    textLabel.Position = UDim2.new(0.5, -150, 0.1, 0)
-    textLabel.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    textLabel.Font = Enum.Font.SourceSansBold
-    textLabel.TextSize = 24
-    textLabel.Text = "⚡ Mentioned: " .. message
-    textLabel.Parent = screenGui
-
-    -- Hapus popup setelah 3 detik
-    delay(3, function()
-        screenGui:Destroy()
-        sound:Destroy()
-    end)
-end
-
--- ===== Gabung notifikasi =====
-local function Notify(senderName, message)
-    NotifyLocal(message)
-    sendToDiscord("Mention detected in Roblox!\nPlayer: " .. senderName .. "\nMessage: " .. message)
-end
-
--- ===== Monitor RemoteEvent chat (jika ada) =====
-local chatRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("ChatMessage")
-if chatRemote then
-    chatRemote.OnClientEvent:Connect(function(sender, message)
-        if message:lower():find(PlayerName:lower()) then
-            Notify(sender.Name, message)
+local function isBlacklisted(name)
+    for _, b in ipairs(blacklist) do
+        if string.find(name, b) then
+            return true
         end
-    end)
+    end
+    return false
 end
 
--- ===== Monitor semua TextLabel di GUI =====
-local function monitorGui(gui)
-    gui.DescendantAdded:Connect(function(child)
-        if child:IsA("TextLabel") then
-            -- Debug print
-            print("Detected TextLabel: " .. child.Text)
-            if child.Text:lower():find(PlayerName:lower()) then
-                Notify("Unknown (GUI)", child.Text)
+--// Hook Remotes
+local function hookRemotes(parent, sourceName)
+    for _, obj in ipairs(parent:GetDescendants()) do
+        if obj:IsA("RemoteEvent") and not isBlacklisted(obj.Name) then
+            obj.OnClientEvent:Connect(function(...)
+                local args = {...}
+                warn("[RemoteEvent]["..sourceName.."]:", obj:GetFullName(), ...)
+                sendToDiscord(sourceName, obj, args)
+            end)
+        elseif obj:IsA("RemoteFunction") and not isBlacklisted(obj.Name) then
+            local old = obj.OnClientInvoke
+            obj.OnClientInvoke = function(...)
+                local args = {...}
+                warn("[RemoteFunction]["..sourceName.."]:", obj:GetFullName(), ...)
+                sendToDiscord(sourceName, obj, args)
+                if old then
+                    return old(...)
+                end
             end
         end
-    end)
-end
-
--- Scan semua ScreenGui di PlayerGui
-for _, gui in pairs(PlayerGui:GetChildren()) do
-    if gui:IsA("ScreenGui") then
-        monitorGui(gui)
     end
 end
 
--- Tambah listener untuk ScreenGui baru yang muncul
-PlayerGui.ChildAdded:Connect(function(gui)
-    if gui:IsA("ScreenGui") then
-        monitorGui(gui)
+-- Hook static
+hookRemotes(game.ReplicatedStorage, "ReplicatedStorage")
+hookRemotes(LocalPlayer:WaitForChild("PlayerGui"), "PlayerGui")
+hookRemotes(workspace, "Workspace")
+
+-- Hook dynamic (kalau remote baru muncul belakangan)
+game.DescendantAdded:Connect(function(obj)
+    if isBlacklisted(obj.Name) then return end
+    if obj:IsA("RemoteEvent") then
+        obj.OnClientEvent:Connect(function(...)
+            local args = {...}
+            warn("[RemoteEvent][Dynamic]:", obj:GetFullName(), ...)
+            sendToDiscord("Dynamic", obj, args)
+        end)
+    elseif obj:IsA("RemoteFunction") then
+        obj.OnClientInvoke = function(...)
+            local args = {...}
+            warn("[RemoteFunction][Dynamic]:", obj:GetFullName(), ...)
+            sendToDiscord("Dynamic", obj, args)
+        end
     end
 end)
-
-print("✅ AFK-ready mention monitor active for player: " .. PlayerName)
