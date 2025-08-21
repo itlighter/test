@@ -69,6 +69,7 @@ end
 --// Blacklist supaya ga spam
 local blacklist = {
     "TimeSyncEvent", -- contoh
+    "TweenCommunication",
 }
 
 local function isBlacklisted(name)
