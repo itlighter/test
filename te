@@ -8,7 +8,13 @@ local Workspace = game:GetService("Workspace")
 -- Exclude list (pakai full path string biar gampang cek)
 local excludeList = {
     ["Workspace.Purchasable.Delta.Enchanted Sluice"] = true,
-    ["Workspace.Purchasable.RiverTown.Merchant's Potion"] = true
+    ["Workspace.Purchasable.RiverTown.Merchant's Potion"] = true,
+    ["Workspace.Purchasable.StarterTown"] = true,
+    ["Workspace.Purchasable.RiverTown"] = true,
+    ["Workspace.Purchasable.Delta"] = true,
+    ["Workspace.Purchasable.Cavern"] = true,
+    ["Workspace.Purchasable.Frozen Peak"] = true,
+    ["Workspace.Purchasable.Volcano"] = true
 }
 
 -- fungsi kirim ke discord
@@ -67,7 +73,9 @@ notificationEvent.OnClientEvent:Connect(function(...)
             location = "Unknown"
         end
 
-        local children = getChildrenList()
-        sendToDiscord(location, children)
+        task.delay(15, function()
+            local children = getChildrenList()
+            sendToDiscord(location, children)
+        end)
     end
 end)
