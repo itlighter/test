@@ -1,176 +1,73 @@
 --// Config
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1406862075988545658/a7sM5kebE9xUS_CNlWrPlwMOI-PLY3pZmKltgjfrsy4239Ee-RKLXYuX33DUWMGkby74"
+local WEBHOOK_URL = "https://discord.com/api/webhooks/XXXXXXXX/XXXXXXXX" -- ganti webhook
 
 local HttpService = game:GetService("HttpService")
-local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
---// Resolve Finder UserId -> Username
-local function resolveFinder(userId)
-    -- cek apakah player ada di server
-    local player = Players:GetPlayerByUserId(userId)
-    if player then
-        return string.format("%s (UserId: %d)", player.Name, userId)
-    end
-
-    -- kalau ga ada di server, coba request ke API Roblox
-    local success, result = pcall(function()
-        local url = "https://users.roblox.com/v1/users/"..userId
-        local response = game:HttpGet(url)
-        local data = HttpService:JSONDecode(response)
-        return data.name
-    end)
-
-    if success and result then
-        return string.format("%s (UserId: %d)", result, userId)
-    end
-
-    return string.format("UserId: %d", userId)
-end
-
---// Utility format argumen
-local function formatValue(v)
-    local t = typeof(v)
-    if t == "Instance" then
-        return string.format("[Instance: %s (%s)]", v.Name, v.ClassName)
-    elseif t == "Vector3" then
-        return string.format("[Vector3: %.2f, %.2f, %.2f]", v.X, v.Y, v.Z)
-    elseif t == "CFrame" then
-        return "[CFrame]"
-    elseif t == "Color3" then
-        return string.format("[Color3: R=%.2f G=%.2f B=%.2f]", v.R, v.G, v.B)
-    elseif t == "table" then
-        local parts = {}
-        for k, v2 in pairs(v) do
-            if k == "Finder" and typeof(v2) == "number" then
-                table.insert(parts, string.format("%s = %s", tostring(k), resolveFinder(v2)))
-            else
-                table.insert(parts, string.format("%s = %s", tostring(k), formatValue(v2)))
-            end
-        end
-        return "{ " .. table.concat(parts, ", ") .. " }"
-    elseif t == "function" then
-        return "[Function]"
-    elseif t == "userdata" then
-        return "[Userdata]"
-    else
-        return tostring(v)
-    end
-end
-
-local function formatArgs(args)
-    local out = {}
-    for i, v in ipairs(args) do
-        table.insert(out, string.format("[%d] = %s", i, formatValue(v)))
-    end
-    return #out > 0 and table.concat(out, "\n") or "[No Arguments]"
-end
-
---// Kirim ke Discord
-local function sendToDiscord(sourceName, obj, args, type)
-    local colors = {
-        RemoteEvent = 3447003,   -- biru
-        RemoteFunction = 5763719, -- hijau
-        Dynamic = 15844367       -- kuning
-    }
-
-    local data = {
-        username = "Remote Logger",
-        embeds = {{
-            title = string.format("[%s] %s", sourceName, obj:GetFullName()),
-            description = "```lua\n"..formatArgs(args).."\n```",
-            color = colors[type] or 0,
-            timestamp = DateTime.now():ToIsoDate()
-        }}
-    }
-
-    local body = HttpService:JSONEncode(data)
-    local request = (http_request or request or syn.request)
-    if request then
-        request({
-            Url = WEBHOOK_URL,
-            Method = "POST",
-            Headers = {["Content-Type"] = "application/json"},
-            Body = body
-        })
-    end
-end
-
---// Blacklist supaya ga spam
-local blacklist = {
-    "TimeSyncEvent", -- contoh
-    "TweenCommunication",
-    "SystemMessage",
-    "UpdateQuestData",
+-- Exclude list (pakai full path string biar gampang cek)
+local excludeList = {
+    ["Workspace.Purchasable.Delta.Enchanted Sluice"] = true,
+    ["Workspace.Purchasable.RiverTown.Merchant's Potion"] = true
 }
 
-local function isBlacklisted(name)
-    for _, b in ipairs(blacklist) do
-        if string.find(name, b) then
-            return true
-        end
+-- fungsi kirim ke discord
+local function sendToDiscord(location, childrenList)
+    local req = (http_request or request or syn.request)
+    if not req then
+        warn("Exploit environment tidak support http_request")
+        return
     end
-    return false
+
+    -- format list ke bentuk nomor
+    local stockLines = {}
+    for i, item in ipairs(childrenList) do
+        table.insert(stockLines, i .. ". " .. item)
+    end
+
+    local content = "Trader Location : " .. location .. "\n\nStocks :\n" .. table.concat(stockLines, "\n")
+
+    local data = {
+        content = content
+    }
+
+    req({
+        Url = WEBHOOK_URL,
+        Method = "POST",
+        Headers = {["Content-Type"] = "application/json"},
+        Body = HttpService:JSONEncode(data)
+    })
 end
 
---// Hook RemoteEvent & RemoteFunction
-local function hookRemotes(parent, sourceName)
-    for _, obj in ipairs(parent:GetDescendants()) do
-        if obj:IsA("RemoteEvent") and not isBlacklisted(obj.Name) then
-            obj.OnClientEvent:Connect(function(...)
-                local args = {...}
-                warn("[RemoteEvent]["..sourceName.."]:", obj:GetFullName(), ...)
-                sendToDiscord(sourceName, obj, args, "RemoteEvent")
-            end)
-        elseif obj:IsA("RemoteFunction") and not isBlacklisted(obj.Name) then
-            local old
-            local success, callback = pcall(function()
-                return rawget(obj, "OnClientInvoke")
-            end)
-            if success then old = callback end
+-- fungsi ambil semua anak langsung kecuali exclude
+local function getChildrenList()
+    local results = {}
 
-            obj.OnClientInvoke = function(...)
-                local args = {...}
-                warn("[RemoteFunction]["..sourceName.."]:", obj:GetFullName(), ...)
-                sendToDiscord(sourceName, obj, args, "RemoteFunction")
-                if old then
-                    return old(...)
-                end
-                return nil
-            end
+    for _, child in ipairs(Workspace.Purchasable:GetChildren()) do
+        local path = child:GetFullName()
+        if not excludeList[path] then
+            table.insert(results, child.Name) -- cuma kirim nama
         end
     end
+
+    return results
 end
 
--- Hook static
-hookRemotes(game.ReplicatedStorage, "ReplicatedStorage")
-hookRemotes(LocalPlayer:WaitForChild("PlayerGui"), "PlayerGui")
-hookRemotes(workspace, "Workspace")
+-- listen ke Notification event
+local notificationEvent = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Info"):WaitForChild("Notification")
 
--- Hook dynamic (buat Remote baru yang spawn setelah game jalan)
-game.DescendantAdded:Connect(function(obj)
-    if isBlacklisted(obj.Name) then return end
-    if obj:IsA("RemoteEvent") then
-        obj.OnClientEvent:Connect(function(...)
-            local args = {...}
-            warn("[RemoteEvent][Dynamic]:", obj:GetFullName(), ...)
-            sendToDiscord("Dynamic", obj, args, "Dynamic")
-        end)
-    elseif obj:IsA("RemoteFunction") then
-        local old
-        local success, callback = pcall(function()
-            return rawget(obj, "OnClientInvoke")
-        end)
-        if success then old = callback end
+notificationEvent.OnClientEvent:Connect(function(...)
+    local args = {...}
+    local message = args[1]
 
-        obj.OnClientInvoke = function(...)
-            local args = {...}
-            warn("[RemoteFunction][Dynamic]:", obj:GetFullName(), ...)
-            sendToDiscord("Dynamic", obj, args, "Dynamic")
-            if old then
-                return old(...)
-            end
-            return nil
+    if typeof(message) == "string" and message:find("The wandering trader has arrived") then
+        -- cari lokasi setelah kata "at"
+        local location = message:match("at (.+)!")
+        if not location then
+            location = "Unknown"
         end
+
+        local children = getChildrenList()
+        sendToDiscord(location, children)
     end
 end)
