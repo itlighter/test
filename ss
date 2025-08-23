@@ -65,7 +65,7 @@ ReplicatedStorage.Remotes.Info.BigNotification.OnClientEvent:Connect(function(ti
         local timestamp = string.format("<t:%d:R>", unix)
 
         local message = string.format(
-            "<t:%d:R> \\|\\| %s - \\| %s \\| \\| (%s) \\|\\|",
+            "%s \\|\\| %s - \\| %s \\| \\| (%s) \\|\\|",
             timestamp,
             level,
             displayName,
