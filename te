@@ -170,7 +170,7 @@ notificationEvent.OnClientEvent:Connect(function(...)
         print("Trader detected at: " .. location)
         print("Waiting 15 seconds before scanning stocks...")
         
-        task.delay(15, function()
+        task.delay(10, function()
             print("Scanning trader stocks...")
             local children = getChildrenList()
             sendToDiscord(location, children)
