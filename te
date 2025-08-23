@@ -5,6 +5,10 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 
+-- Print when script starts
+print("=== Trader Notifier Script Started ===")
+print("Waiting for trader arrival notifications...")
+
 -- Exclude list (pakai full path string biar gampang cek)
 local excludeList = {
     ["Workspace.Purchasable.Delta.Enchanted Sluice"] = true,
@@ -17,18 +21,61 @@ local excludeList = {
     ["Workspace.Purchasable.Volcano"] = true
 }
 
+-- fungsi format angka dengan comma separator
+local function formatNumber(number)
+    if not number or type(number) ~= "number" then
+        return tostring(number or "N/A")
+    end
+    
+    local formatted = tostring(number)
+    local k = #formatted
+    
+    -- Tambahkan comma setiap 3 digit dari belakang
+    while k > 3 do
+        formatted = formatted:sub(1, k-3) .. "," .. formatted:sub(k-2)
+        k = k - 3
+    end
+    
+    return formatted
+end
+
+-- fungsi ambil harga dari ShopItem
+local function getItemPrice(item)
+    local shopItem = item:FindFirstChild("ShopItem")
+    if shopItem then
+        local shardPrice = shopItem:GetAttribute("ShardPrice")
+        local regularPrice = shopItem:GetAttribute("Price")
+        
+        if shardPrice then
+            return shardPrice, "S" -- ShardPrice: harga di depan, currency "S" di belakang
+        elseif regularPrice then
+            return regularPrice, "$" -- Price: currency "$" di depan, harga di belakang
+        end
+    end
+    return nil, nil
+end
+
 -- fungsi kirim ke discord
-local function sendToDiscord(location, childrenList)
+local function sendToDiscord(location, itemsList)
     local req = (http_request or request or syn.request)
     if not req then
         warn("Exploit environment tidak support http_request")
         return
     end
 
-    -- format list ke bentuk nomor
+    -- format list ke bentuk nomor dengan harga
     local stockLines = {}
-    for i, item in ipairs(childrenList) do
-        table.insert(stockLines, i .. ". " .. item)
+    for i, itemData in ipairs(itemsList) do
+        local line = i .. ". " .. itemData.name
+        if itemData.price and itemData.currency then
+            local formattedPrice = formatNumber(itemData.price)
+            if itemData.currency == "$" then
+                line = line .. " - " .. itemData.currency .. formattedPrice
+            else -- "S" currency
+                line = line .. " - " .. formattedPrice .. " " .. itemData.currency
+            end
+        end
+        table.insert(stockLines, line)
     end
 
     local content = "Trader Location : " .. location .. "\n\nStocks :\n" .. table.concat(stockLines, "\n")
@@ -45,14 +92,19 @@ local function sendToDiscord(location, childrenList)
     })
 end
 
--- fungsi ambil semua anak langsung kecuali exclude
+-- fungsi ambil semua anak langsung kecuali exclude dengan harga
 local function getChildrenList()
     local results = {}
 
     for _, child in ipairs(Workspace.Purchasable:GetChildren()) do
         local path = child:GetFullName()
         if not excludeList[path] then
-            table.insert(results, child.Name) -- cuma kirim nama
+            local price, currency = getItemPrice(child)
+            table.insert(results, {
+                name = child.Name,
+                price = price,
+                currency = currency
+            })
         end
     end
 
@@ -73,9 +125,16 @@ notificationEvent.OnClientEvent:Connect(function(...)
             location = "Unknown"
         end
 
+        print("Trader detected at: " .. location)
+        print("Waiting 15 seconds before scanning stocks...")
+        
         task.delay(15, function()
+            print("Scanning trader stocks...")
             local children = getChildrenList()
             sendToDiscord(location, children)
+            print("Stocks sent to Discord!")
         end)
     end
 end)
+
+print("Script successfully initialized and listening for events")
