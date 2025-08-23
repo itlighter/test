@@ -1,5 +1,5 @@
 --// Config
-local WEBHOOK_URL = https://discord.com/api/webhooks/1408626413787025428/ZvfH7T2noVocf4UoESq66gOMU9bRoJw9-k77DdsUkSjjLJdgdqtjYLmQa5oJhgfjMmFU" -- ganti webhook
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1408626413787025428/ZvfH7T2noVocf4UoESq66gOMU9bRoJw9-k77DdsUkSjjLJdgdqtjYLmQa5oJhgfjMmFU" -- ganti webhook
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -8,6 +8,14 @@ local Workspace = game:GetService("Workspace")
 -- Print when script starts
 print("=== Trader Notifier Script Started ===")
 print("Waiting for trader arrival notifications...")
+
+-- Check if HTTP requests are supported
+local httpSupported = true
+local req = (syn and syn.request) or (http_request) or (request)
+if not req then
+    httpSupported = false
+    warn("HTTP requests not supported in this environment - will only print to console")
+end
 
 -- Exclude list (pakai full path string biar gampang cek)
 local excludeList = {
@@ -57,9 +65,29 @@ end
 
 -- fungsi kirim ke discord
 local function sendToDiscord(location, itemsList)
-    local req = (http_request or request or syn.request)
+    if not httpSupported then
+        print("=== DISCORD WEBHOOK (SIMULATED) ===")
+        print("Trader Location : " .. location)
+        print("\nStocks :")
+        for i, itemData in ipairs(itemsList) do
+            local line = i .. ". " .. itemData.name
+            if itemData.price and itemData.currency then
+                local formattedPrice = formatNumber(itemData.price)
+                if itemData.currency == "$" then
+                    line = line .. " - " .. itemData.currency .. formattedPrice
+                else -- "S" currency
+                    line = line .. " - " .. formattedPrice .. " " .. itemData.currency
+                end
+            end
+            print(line)
+        end
+        print("=== END OF SIMULATED WEBHOOK ===")
+        return
+    end
+
+    local req = (syn and syn.request) or (http_request) or (request)
     if not req then
-        warn("Exploit environment tidak support http_request")
+        warn("HTTP requests not available")
         return
     end
 
@@ -84,12 +112,26 @@ local function sendToDiscord(location, itemsList)
         content = content
     }
 
-    req({
-        Url = WEBHOOK_URL,
-        Method = "POST",
-        Headers = {["Content-Type"] = "application/json"},
-        Body = HttpService:JSONEncode(data)
-    })
+    local success, result = pcall(function()
+        return req({
+            Url = WEBHOOK_URL,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = HttpService:JSONEncode(data)
+        })
+    end)
+
+    if success then
+        print("Successfully sent to Discord webhook!")
+    else
+        warn("Failed to send to Discord: " .. tostring(result))
+        print("=== FALLBACK CONSOLE OUTPUT ===")
+        print("Trader Location : " .. location)
+        print("\nStocks :")
+        for _, line in ipairs(stockLines) do
+            print(line)
+        end
+    end
 end
 
 -- fungsi ambil semua anak langsung kecuali exclude dengan harga
@@ -128,13 +170,14 @@ notificationEvent.OnClientEvent:Connect(function(...)
         print("Trader detected at: " .. location)
         print("Waiting 15 seconds before scanning stocks...")
         
-        task.delay(15, function()
+        task.delay(10, function()
             print("Scanning trader stocks...")
             local children = getChildrenList()
             sendToDiscord(location, children)
-            print("Stocks sent to Discord!")
+            print("Done processing trader stocks!")
         end)
     end
 end)
 
 print("Script successfully initialized and listening for events")
+print("HTTP Support: " .. tostring(httpSupported))
