@@ -1,6 +1,8 @@
 -- Discord Webhook Meteor Shower Logger
 -- Place this script in ServerScriptService
 
+print("Mulai")
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
@@ -8,6 +10,7 @@ local RunService = game:GetService("RunService")
 
 -- Configuration
 local DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1408441169028972797/_ls8aguNPMDTgrO6yJ6l72p5CXjUD56md_gy6t7xN0Lkf69pqhxaHFTddOtwkX1a3W0Q" -- Replace with your webhook URL
+local req = (syn and syn.request) or (http_request) or (request)
 
 -- Wait for the remote to exist
 local remote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Info"):WaitForChild("BigNotification")
@@ -55,13 +58,18 @@ local function getDisplayName(userId)
     end
 end
 
--- Function to extract user ID from code (assuming format like "resn6912" where numbers might be userId)
-local function extractUserIdFromCode(code)
-    -- Try to extract numbers from the code
-    local numbers = string.match(code, "%d+")
-    if numbers then
-        return tonumber(numbers)
+-- Function to find userId by matching username from code
+local function findUserIdByUsername(code)
+    -- The code should be the username we're looking for
+    local targetUsername = code
+    
+    -- Loop through all players in the server
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Name:lower() == targetUsername:lower() then
+            return player.UserId
+        end
     end
+    
     return nil
 end
 
@@ -80,6 +88,16 @@ local function getPlayerLevel(userId)
         end
     end
     return "?"
+end
+
+-- Function to get player info directly from Players service (since they're in server)
+local function getPlayerInfoFromServer(userId)
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.UserId == userId then
+            return player.Name, player.DisplayName
+        end
+    end
+    return "Unknown", "Unknown"
 end
 
 -- Function to send to Discord webhook
@@ -102,14 +120,23 @@ local function sendToDiscord(timestamp, level, displayName, username, code)
         }
     }
     
+    local requestData = {
+        Url = DISCORD_WEBHOOK,
+        Method = "POST",
+        Headers = {
+            ["Content-Type"] = "application/json"
+        },
+        Body = HttpService:JSONEncode(data)
+    }
+    
     local success, response = pcall(function()
-        return HttpService:PostAsync(DISCORD_WEBHOOK, HttpService:JSONEncode(data), Enum.HttpContentType.ApplicationJson)
+        return req(requestData)
     end)
     
-    if success then
+    if success and response.Success then
         print("✅ Successfully sent to Discord")
     else
-        warn("❌ Failed to send to Discord: " .. tostring(response))
+        warn("❌ Failed to send to Discord: " .. tostring(response and response.StatusMessage or "Request failed"))
     end
 end
 
@@ -129,13 +156,12 @@ remote.OnClientEvent:Connect(function(...)
                 print("🌟 METEOR SHOWER CODE DETECTED: " .. code)
                 print("📝 Full message: " .. message)
                 
-                -- Extract userId from code
-                local userId = extractUserIdFromCode(code)
+                -- Find userId by matching username from code
+                local userId = findUserIdByUsername(code)
                 
                 if userId then
-                    -- Get player information
-                    local username = getPlayerInfo(userId)
-                    local displayName = getDisplayName(userId)
+                    -- Get player information directly from server
+                    local username, displayName = getPlayerInfoFromServer(userId)
                     local level = getPlayerLevel(userId)
                     local timestamp = getRelativeTimestamp()
                     
@@ -149,9 +175,10 @@ remote.OnClientEvent:Connect(function(...)
                     sendToDiscord(timestamp, level, displayName, username, code)
                     
                 else
-                    print("⚠️ Could not extract userId from code: " .. code)
+                    print("⚠️ Could not find player with username: " .. code)
+                    print("   Player might not be in the current server")
                     -- Send basic info without player details
-                    sendToDiscord(getRelativeTimestamp(), "?", "Unknown", "Unknown", code)
+                    sendToDiscord(getRelativeTimestamp(), "?", "Unknown", code, code)
                 end
                 
                 print("⏰ Time: " .. os.date("%X"))
