@@ -1,0 +1,53 @@
+local HttpService = game:GetService("HttpService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local SystemMessage = Remotes:WaitForChild("Misc"):WaitForChild("SystemMessage")
+
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1406862075988545658/a7sM5kebE9xUS_CNlWrPlwMOI-PLY3pZmKltgjfrsy4239Ee-RKLXYuX33DUWMGkby74"
+
+local function formatMessage(message)
+    local output = {}
+    -- 1. Teks
+    output[1] = string.format("[System]: %s", message.Text or "No Text")
+    
+    -- 2. Warna (Color3)
+    if message.Color then
+        local c = message.Color
+        output[2] = string.format("[Color3: R=%.2f G=%.2f B=%.2f]", c.R, c.G, c.B)
+    else
+        output[2] = "[Color3: nil]"
+    end
+    
+    -- 3. Detail tambahan
+    if message.Extra then
+        output[3] = message.Extra
+    else
+        output[3] = {}
+    end
+    
+    return output
+end
+
+local function sendWebhook(text)
+    local data = {
+        content = text
+    }
+    HttpService:PostAsync(WEBHOOK_URL, HttpService:JSONEncode(data), Enum.HttpContentType.ApplicationJson)
+end
+
+-- Listen RemoteEvent
+SystemMessage.OnClientEvent:Connect(function(message)
+    local args = formatMessage(message)
+    
+    local extra = args[3]
+    local rarity = extra.Rarity or extra["Rarity"]
+    
+    if rarity == "Mythic" or rarity == "Exotic" then
+        -- Ambil teks setelah "[System]: "
+        local systemText = args[1]
+        local content = systemText:match("%[System%]:%s*(.+)")
+        if content then
+            sendWebhook(content)
+        end
+    end
+end)
