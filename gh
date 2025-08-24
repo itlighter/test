@@ -3,7 +3,7 @@ local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 
 -- Daftar blacklist full path
 local blacklist = {
-    ["ReplicatedStorage.Remotes.Misc.SystemMessage"] = true.
+    ["ReplicatedStorage.Remotes.Misc.SystemMessage"] = true,
     ["ReplicatedStorage.Modules.Utility.TweenServicePlus.TweenCommunication"] = true,
     ["ReplicatedStorage.Modules.Utility.TweenServicePlus.SyncedTime.TimeSyncEvent"] = true
 }
