@@ -19,8 +19,20 @@ end
 
 -- Listen RemoteEvent
 SystemMessage.OnClientEvent:Connect(function(...)
-    local args = {...} -- Ambil semua argumen yang dikirim server
-    if args[1] then
-        sendToDiscord(args[1]) -- Kirim langsung args[1] ke webhook
+    local args = {...} -- args[1] = [System]: text, args[2] = Color3, args[3] = table Extra
+
+    local text = args[1]
+    local extra = args[3]
+
+    if typeof(text) == "string" and typeof(extra) == "table" then
+        local rarity = extra.Rarity or extra["Rarity"]
+        if rarity == "Mythic" or rarity == "Exotic" then
+            -- Ambil teks setelah "[System]: "
+            local content = text:match("%[System%]:%s*(.+)")
+            -- Hanya kirim kalau teks tidak diawali "Tip"
+            if content and not content:match("^Tip") then
+                sendToDiscord(content)
+            end
+        end
     end
 end)
