@@ -31,7 +31,9 @@ SystemMessage.OnClientEvent:Connect(function(...)
             local content = text:match("%[System%]:%s*(.+)")
             -- Hanya kirim kalau teks tidak diawali "Tip"
             if content and not content:match("^Tip") then
-                sendToDiscord(content)
+                -- Tambah relative timestamp Discord
+                local timestamp = string.format("<t:%d:R>", os.time())
+                sendToDiscord(content .. " " .. timestamp)
             end
         end
     end
