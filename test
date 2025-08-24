@@ -18,7 +18,7 @@ local function sendWebhook(playerCount)
     end
 
     local jobId = game.JobId
-    local gameLink = "https://www.roblox.com/games/"..PLACE_ID.."?privateServerLinkCode="..jobId
+    local gameLink = "roblox://placeId=" .. PLACE_ID .. "&gameInstanceId=" .. jobId
     print("DEBUG: Kirim webhook dengan link:", gameLink)
 
     local body = {
