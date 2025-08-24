@@ -9,6 +9,7 @@ local WEBHOOK_URL = "DISCORD_WEBHOOK_URL" -- ganti pake webhook lu
 local TeleportData = {}
 local Cursor = ""
 local MAX_PLAYER = 15 -- maksimal jumlah player di server
+local req = (syn and syn.request) or (http_request) or (fluxus and fluxus.request) or request
 
 -- function kirim webhook
 local function sendWebhook(msg)
