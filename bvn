@@ -3,7 +3,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local SystemMessage = Remotes:WaitForChild("Misc"):WaitForChild("SystemMessage")
 
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1409154986595713124/Ye8el184b9j8_YVgi67F650H1PCo3qhs_PgVSpdBx6nuvCIlL_0Jm_zNXi5B8mMNkuMI"
+local WEBHOOK_URL = "PASTE_DISCORD_WEBHOOK_HERE"
 
 -- Fungsi kirim ke Discord via Synapse/Exploit
 local Request = syn and syn.request or http_request or request or nil
@@ -17,22 +17,10 @@ local function sendToDiscord(content)
     })
 end
 
--- Format message menjadi args[1], args[2], args[3]
-local function formatMessage(message)
-    local output = {}
-    output[1] = string.format("[System]: %s", message.Text or "No Text")
-    if message.Color then
-        local c = message.Color
-        output[2] = string.format("[Color3: R=%.2f G=%.2f B=%.2f]", c.R, c.G, c.B)
-    else
-        output[2] = "[Color3: nil]"
-    end
-    output[3] = message.Extra or {}
-    return output
-end
-
 -- Listen RemoteEvent
-SystemMessage.OnClientEvent:Connect(function(message)
-    local args = formatMessage(message)
-    sendToDiscord(args[1])
+SystemMessage.OnClientEvent:Connect(function(...)
+    local args = {...} -- Ambil semua argumen yang dikirim server
+    if args[1] then
+        sendToDiscord(args[1]) -- Kirim langsung args[1] ke webhook
+    end
 end)
