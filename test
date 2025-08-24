@@ -1,25 +1,26 @@
-local HttpService = game:GetService("HttpService")
-local TeleportService = game:GetService("TeleportService")
-local Players = game:GetService("Players")
+--// Config
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1406862075988545658/a7sM5kebE9xUS_CNlWrPlwMOI-PLY3pZmKltgjfrsy4239Ee-RKLXYuX33DUWMGkby74" -- ganti punyamu
+local PLACE_ID = game.PlaceId
 
-local PlaceId = game.PlaceId
+--// Services
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 
-local WEBHOOK_URL = "DISCORD_WEBHOOK_URL" -- ganti pake webhook lu
-local TeleportData = {}
-local Cursor = ""
-local MAX_PLAYER = 15 -- maksimal jumlah player di server
-local req = (syn and syn.request) or (http_request) or (fluxus and fluxus.request) or request
+-- detect request function (executor dependent)
+local req = (syn and syn.request) or (http and http.request) or http_request or request
 
--- function kirim webhook
-local function sendWebhook(msg)
+--// Function kirim webhook
+local function sendWebhook(playerCount)
     if not req then
-        warn("Request function tidak tersedia di executor kamu.")
-        return false
+        warn("Request function tidak tersedia, executor tidak support HTTP request.")
+        return
     end
 
     local jobId = game.JobId
-    local gameLink = "roblox://placeId=" .. PLACE_ID .. "&gameInstanceId=" .. jobId
+    local gameLink = "https://www.roblox.com/games/"..PLACE_ID.."?privateServerLinkCode="..jobId
+    print("DEBUG: Kirim webhook dengan link:", gameLink)
+
     local body = {
         content = "☄️ Meteor Shower Found!\n" .. playerCount .. "/20\n" .. gameLink,
         components = {
@@ -37,8 +38,7 @@ local function sendWebhook(msg)
         }
     }
 
-    -- Add error handling for webhook request
-    local success, response = pcall(function()
+    local success, res = pcall(function()
         return req({
             Url = WEBHOOK_URL,
             Method = "POST",
@@ -47,84 +47,27 @@ local function sendWebhook(msg)
         })
     end)
 
-    if success then
-        print("✅ Webhook sent successfully!")
-        if response and response.StatusCode then
-            print("Status Code:", response.StatusCode)
-        end
-        return true
+    if success and res then
+        print("Webhook Response:", res.StatusCode, res.Body or "No body")
     else
-        warn("❌ Webhook failed:", tostring(response))
-        return false
+        warn("Webhook gagal:", res)
     end
 end
 
--- serverhop function
-local function serverHop()
-    local url = "https://games.roblox.com/v1/games/" .. PlaceId .. "/servers/Public?sortOrder=Desc&limit=100"
-
-    if Cursor ~= "" then
-        url = url .. "&cursor=" .. Cursor
-    end
-
-    local success, result = pcall(function()
-        return HttpService:JSONDecode(game:HttpGet(url))
-    end)
-
-    if success and result and result.data then
-        local validServers = {}
-
-        for _, server in ipairs(result.data) do
-            -- skip server yg full, terlalu rame (> MAX_PLAYER), atau udah dikunjungi
-            if server.playing < server.maxPlayers
-               and server.playing <= MAX_PLAYER
-               and not TeleportData[server.id]
-               and server.id ~= game.JobId then
-                table.insert(validServers, server)
-            end
-        end
-
-        if #validServers > 0 then
-            local pick = validServers[math.random(1, #validServers)]
-            TeleportData[pick.id] = true
-            TeleportService:TeleportToPlaceInstance(PlaceId, pick.id, LocalPlayer)
-        elseif result.nextPageCursor then
-            Cursor = result.nextPageCursor
-            serverHop()
-        else
-            if result.nextPageCursor then
-                Cursor = result.nextPageCursor
-                serverHop()
-            else
-                warn("Tidak ada server yang cocok.")
-            end
-            warn("Tidak ada server yang cocok.")
-        end
-    else
-        warn("Gagal ambil data server.")
-    end
-end
-
-serverHop()
--- cek meteor
+--// Detect meteor
 local function checkMeteor()
-    local boosts = LocalPlayer:WaitForChild("PlayerGui"):WaitForChild("MainUI"):WaitForChild("Boosts")
+    local boosts = LocalPlayer:FindFirstChild("PlayerGui")
+        and LocalPlayer.PlayerGui:FindFirstChild("MainUI")
+        and LocalPlayer.PlayerGui.MainUI:FindFirstChild("Boosts")
 
-    if boosts:FindFirstChild("Meteor Shower") then
-        local playerCount = #Players:GetPlayers()
-        local link = "https://www.roblox.com/games/"..PlaceId.."?serverId="..game.JobId
-        local msg = string.format("Meteor Shower Found\nPlayers: %d\nServer: %s", playerCount, link)
-        sendWebhook(msg)
-
-        task.wait(20) -- tunggu 20 detik abis kirim webhook
-        serverHop()
+    if boosts and boosts:FindFirstChild("Meteor Shower") then
+        local count = #Players:GetPlayers()
+        print("DEBUG: Meteor ketemu, player count:", count)
+        sendWebhook(count)
     else
-        task.wait(30) -- ga ketemu → tunggu 30 detik dulu
-        serverHop()
+        print("DEBUG: Meteor tidak ketemu.")
     end
 end
 
--- tunggu 60 detik abis join server baru
-task.delay(60, function()
-    checkMeteor()
-end)
+--// Jalankan sekali untuk tes
+checkMeteor()
