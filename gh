@@ -1,93 +1,72 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
-local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
 
--- Webhook Discord
-local WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_URL_HERE"
+-- Webhook config
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1406862075988545658/a7sM5kebE9xUS_CNlWrPlwMOI-PLY3pZmKltgjfrsy4239Ee-RKLXYuX33DUWMGkby74"
+local Request = syn and syn.request or http_request or request or nil
+local function sendToDiscord(content)
+    if not Request then return end
+    Request({
+        Url = WEBHOOK_URL,
+        Method = "POST",
+        Headers = { ["Content-Type"] = "application/json" },
+        Body = HttpService:JSONEncode({ content = content })
+    })
+end
 
--- Daftar blacklist full path
+-- Blacklist full path
 local blacklist = {
     ["ReplicatedStorage.Remotes.Misc.SystemMessage"] = true,
     ["ReplicatedStorage.Modules.Utility.TweenServicePlus.TweenCommunication"] = true,
     ["ReplicatedStorage.Modules.Utility.TweenServicePlus.SyncedTime.TimeSyncEvent"] = true
 }
 
-local function isBlacklisted(remote)
-    return blacklist[remote:GetFullName()] == true
+-- Helper function untuk cek blacklist
+local function isBlacklisted(obj)
+    return blacklist[obj:GetFullName()] or false
 end
 
-local function formatValue(val)
-    if typeof(val) == "Color3" then
-        return string.format("[Color3: R=%.2f G=%.2f B=%.2f]", val.R, val.G, val.B)
-    elseif typeof(val) == "table" then
-        local parts = {}
-        for k,v in pairs(val) do
-            table.insert(parts, string.format("%s = %s", tostring(k), tostring(v)))
-        end
-        return "{ " .. table.concat(parts, ", ") .. " }"
-    else
-        return tostring(val)
-    end
-end
+-- Attach listener ke RemoteEvent / RemoteFunction
+local function attachListener(obj)
+    if isBlacklisted(obj) then return end
 
--- Fungsi kirim ke Discord webhook pakai RequestAsync
-local function sendWebhook(remoteName, args)
-    local content = string.format("**[%s] %s**\n", "ReplicatedStorage", remoteName)
-    for i,v in ipairs(args) do
-        content = content .. string.format("[%d] = %s\n", i, formatValue(v))
-    end
-
-    local payload = HttpService:JSONEncode({ content = content })
-
-    -- RequestAsync
-    local success, err = pcall(function()
-        HttpService:RequestAsync({
-            Url = WEBHOOK_URL,
-            Method = "POST",
-            Headers = {
-                ["Content-Type"] = "application/json"
-            },
-            Body = payload
-        })
-    end)
-
-    if not success then
-        warn("Failed to send webhook:", err)
-    end
-end
-
-local function connectRemote(remote)
-    if not isBlacklisted(remote) then
-        remote.OnClientEvent:Connect(function(...)
+    if obj:IsA("RemoteEvent") then
+        obj.OnClientEvent:Connect(function(...)
             local args = {...}
-            print(string.format("[%s] %s", "ReplicatedStorage", remote:GetFullName()))
+            local argStr = {}
             for i,v in ipairs(args) do
-                print(string.format("[%d] = %s", i, formatValue(v)))
+                table.insert(argStr, tostring(v))
             end
-            sendWebhook(remote:GetFullName(), args)
+            local message = string.format("[RemoteEvent Fired] %s -> Args: %s", obj:GetFullName(), table.concat(argStr, ", "))
+            print(message)
+            sendToDiscord(message)
         end)
-        print("Connected:", remote:GetFullName())
-    else
-        print("Event di-blacklist:", remote:GetFullName())
+    elseif obj:IsA("RemoteFunction") then
+        local oldInvoke = obj.InvokeServer
+        obj.InvokeServer = function(self, ...)
+            local args = {...}
+            local message = string.format("[RemoteFunction Invoke] %s -> Args: %s", obj:GetFullName(), table.concat(args, ", "))
+            print(message)
+            sendToDiscord(message)
+            return oldInvoke(self, unpack(args))
+        end
     end
 end
 
-local function listenFolder(folder)
-    for _, child in ipairs(folder:GetChildren()) do
-        if child:IsA("RemoteEvent") then
-            connectRemote(child)
-        elseif child:IsA("Folder") then
-            listenFolder(child)
-        end
+-- Scan semua descendants di ReplicatedStorage
+for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
+    if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+        attachListener(obj)
     end
-
-    folder.ChildAdded:Connect(function(child)
-        if child:IsA("RemoteEvent") then
-            connectRemote(child)
-        elseif child:IsA("Folder") then
-            listenFolder(child)
-        end
-    end)
 end
 
-listenFolder(Remotes)
+-- Listener untuk Remote baru yang ditambahkan
+ReplicatedStorage.DescendantAdded:Connect(function(obj)
+    if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
+        attachListener(obj)
+    end
+end)
+
+print("Dynamic listener attached (blacklist applied)!")
