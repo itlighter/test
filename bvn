@@ -42,7 +42,7 @@ SystemMessage.OnClientEvent:Connect(function(message)
     local extra = args[3]
     local rarity = extra.Rarity or extra["Rarity"]
     
-    if rarity == "Mythic" or rarity == "Exotic" then
+    if rarity == "Mythic" or rarity == "Exotic" or rarity == "Legendary" then
         -- Ambil teks setelah "[System]: "
         local systemText = args[1]
         local content = systemText:match("%[System%]:%s*(.+)")
