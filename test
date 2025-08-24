@@ -1,0 +1,73 @@
+--// Config
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1406862075988545658/a7sM5kebE9xUS_CNlWrPlwMOI-PLY3pZmKltgjfrsy4239Ee-RKLXYuX33DUWMGkby74" -- ganti punyamu
+local PLACE_ID = game.PlaceId
+
+--// Services
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+
+-- detect request function (executor dependent)
+local req = (syn and syn.request) or (http and http.request) or http_request or request
+
+--// Function kirim webhook
+local function sendWebhook(playerCount)
+    if not req then
+        warn("Request function tidak tersedia, executor tidak support HTTP request.")
+        return
+    end
+
+    local jobId = game.JobId
+    local gameLink = "https://www.roblox.com/games/"..PLACE_ID.."?privateServerLinkCode="..jobId
+    print("DEBUG: Kirim webhook dengan link:", gameLink)
+
+    local body = {
+        content = "☄️ Meteor Shower Found!\n" .. playerCount .. "/20\n" .. gameLink,
+        components = {
+            {
+                type = 1,
+                components = {
+                    {
+                        type = 2,
+                        label = "Join Game",
+                        style = 5,
+                        url = gameLink
+                    }
+                }
+            }
+        }
+    }
+
+    local success, res = pcall(function()
+        return req({
+            Url = WEBHOOK_URL,
+            Method = "POST",
+            Headers = {["Content-Type"] = "application/json"},
+            Body = HttpService:JSONEncode(body)
+        })
+    end)
+
+    if success and res then
+        print("Webhook Response:", res.StatusCode, res.Body or "No body")
+    else
+        warn("Webhook gagal:", res)
+    end
+end
+
+--// Detect meteor
+local function checkMeteor()
+    local boosts = LocalPlayer:FindFirstChild("PlayerGui")
+        and LocalPlayer.PlayerGui:FindFirstChild("MainUI")
+        and LocalPlayer.PlayerGui.MainUI:FindFirstChild("Boosts")
+
+    if boosts and boosts:FindFirstChild("Meteor Shower") then
+        local count = #Players:GetPlayers()
+        print("DEBUG: Meteor ketemu, player count:", count)
+        sendWebhook(count)
+    else
+        print("DEBUG: Meteor tidak ketemu.")
+    end
+end
+
+--// Jalankan sekali untuk tes
+checkMeteor()
