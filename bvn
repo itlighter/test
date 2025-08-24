@@ -3,7 +3,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local SystemMessage = Remotes:WaitForChild("Misc"):WaitForChild("SystemMessage")
 
-local WEBHOOK_URL = "PASTE_DISCORD_WEBHOOK_HERE"
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1409154986595713124/Ye8el184b9j8_YVgi67F650H1PCo3qhs_PgVSpdBx6nuvCIlL_0Jm_zNXi5B8mMNkuMI"
 
 -- Fungsi kirim ke Discord via Synapse/Exploit
 local Request = syn and syn.request or http_request or request or nil
