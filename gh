@@ -1,7 +1,8 @@
+-- Services
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
 
 -- Webhook config
 local WEBHOOK_URL = "https://discord.com/api/webhooks/1406862075988545658/a7sM5kebE9xUS_CNlWrPlwMOI-PLY3pZmKltgjfrsy4239Ee-RKLXYuX33DUWMGkby74"
@@ -18,20 +19,18 @@ end
 
 -- Blacklist full path
 local blacklist = {
-    ["ReplicatedStorage.Remotes.Misc.SystemMessage"] = true,
     ["ReplicatedStorage.Modules.Utility.TweenServicePlus.TweenCommunication"] = true,
     ["ReplicatedStorage.Modules.Utility.TweenServicePlus.SyncedTime.TimeSyncEvent"] = true
 }
 
--- Helper function untuk cek blacklist
+-- Helper function cek blacklist
 local function isBlacklisted(obj)
     return blacklist[obj:GetFullName()] or false
 end
 
--- Attach listener ke RemoteEvent / RemoteFunction
+-- Attach listener ke RemoteEvent
 local function attachListener(obj)
     if isBlacklisted(obj) then return end
-
     if obj:IsA("RemoteEvent") then
         obj.OnClientEvent:Connect(function(...)
             local args = {...}
@@ -39,34 +38,24 @@ local function attachListener(obj)
             for i,v in ipairs(args) do
                 table.insert(argStr, tostring(v))
             end
-            local message = string.format("[RemoteEvent Fired] %s -> Args: %s", obj:GetFullName(), table.concat(argStr, ", "))
+            local message = string.format(
+                "[RemoteEvent Fired] %s -> Args: %s | Player: %s",
+                obj:GetFullName(), table.concat(argStr, ", "), LocalPlayer.Name
+            )
             print(message)
             sendToDiscord(message)
         end)
-    elseif obj:IsA("RemoteFunction") then
-        local oldInvoke = obj.InvokeServer
-        obj.InvokeServer = function(self, ...)
-            local args = {...}
-            local message = string.format("[RemoteFunction Invoke] %s -> Args: %s", obj:GetFullName(), table.concat(args, ", "))
-            print(message)
-            sendToDiscord(message)
-            return oldInvoke(self, unpack(args))
-        end
     end
 end
 
 -- Scan semua descendants di ReplicatedStorage
 for _, obj in ipairs(ReplicatedStorage:GetDescendants()) do
-    if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-        attachListener(obj)
-    end
+    attachListener(obj)
 end
 
--- Listener untuk Remote baru yang ditambahkan
+-- Listener untuk RemoteEvent baru
 ReplicatedStorage.DescendantAdded:Connect(function(obj)
-    if obj:IsA("RemoteEvent") or obj:IsA("RemoteFunction") then
-        attachListener(obj)
-    end
+    attachListener(obj)
 end)
 
-print("Dynamic listener attached (blacklist applied)!")
+print("RemoteEvent listener active! (Player: "..LocalPlayer.Name..")")
