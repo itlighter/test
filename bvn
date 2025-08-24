@@ -3,51 +3,45 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Remotes = ReplicatedStorage:WaitForChild("Remotes")
 local SystemMessage = Remotes:WaitForChild("Misc"):WaitForChild("SystemMessage")
 
-local WEBHOOK_URL = "https://discord.com/api/webhooks/1406862075988545658/a7sM5kebE9xUS_CNlWrPlwMOI-PLY3pZmKltgjfrsy4239Ee-RKLXYuX33DUWMGkby74"
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1409154986595713124/Ye8el184b9j8_YVgi67F650H1PCo3qhs_PgVSpdBx6nuvCIlL_0Jm_zNXi5B8mMNkuMI"
 
+-- Fungsi kirim ke Discord via Synapse/Exploit
+local Request = syn and syn.request or http_request or request or nil
+local function sendToDiscord(content)
+    if not Request then return end
+    Request({
+        Url = WEBHOOK_URL,
+        Method = "POST",
+        Headers = { ["Content-Type"] = "application/json" },
+        Body = HttpService:JSONEncode({ content = content })
+    })
+end
+
+-- Format message menjadi args[1], args[2], args[3]
 local function formatMessage(message)
     local output = {}
-    -- 1. Teks
     output[1] = string.format("[System]: %s", message.Text or "No Text")
-    
-    -- 2. Warna (Color3)
     if message.Color then
         local c = message.Color
         output[2] = string.format("[Color3: R=%.2f G=%.2f B=%.2f]", c.R, c.G, c.B)
     else
         output[2] = "[Color3: nil]"
     end
-    
-    -- 3. Detail tambahan
-    if message.Extra then
-        output[3] = message.Extra
-    else
-        output[3] = {}
-    end
-    
+    output[3] = message.Extra or {}
     return output
-end
-
-local function sendWebhook(text)
-    local data = {
-        content = text
-    }
-    HttpService:PostAsync(WEBHOOK_URL, HttpService:JSONEncode(data), Enum.HttpContentType.ApplicationJson)
 end
 
 -- Listen RemoteEvent
 SystemMessage.OnClientEvent:Connect(function(message)
     local args = formatMessage(message)
-    
     local extra = args[3]
     local rarity = extra.Rarity or extra["Rarity"]
-    
-    if rarity == "Mythic" or rarity == "Exotic" or rarity == "Legendary" then
+
+    if rarity == "Mythic" or rarity == "Exotic" then
         -- Ambil teks setelah "[System]: "
-        local systemText = args[1]
-        local content = systemText:match("%[System%]:%s*(.+)")
+        local content = args[1]:match("%[System%]:%s*(.+)")
         if content then
-            sendWebhook(content)
+            sendToDiscord(content)
         end
     end
 end)
