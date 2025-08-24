@@ -34,14 +34,5 @@ end
 -- Listen RemoteEvent
 SystemMessage.OnClientEvent:Connect(function(message)
     local args = formatMessage(message)
-    local extra = args[3]
-    local rarity = extra.Rarity or extra["Rarity"]
-
-    if rarity == "Mythic" or rarity == "Exotic" then
-        -- Ambil teks setelah "[System]: "
-        local content = args[1]:match("%[System%]:%s*(.+)")
-        if content then
-            sendToDiscord(content)
-        end
-    end
+    sendToDiscord(args[1])
 end)
