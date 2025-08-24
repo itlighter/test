@@ -13,22 +13,55 @@ local function isBlacklisted(remote)
     return blacklist[remote:GetFullName()] == true
 end
 
--- Loop semua RemoteEvent di Remotes (rekursif)
-local function listenRemotes(folder)
-    for _, child in ipairs(folder:GetChildren()) do
-        if child:IsA("RemoteEvent") then
-            if not isBlacklisted(child) then
-                child.OnClientEvent:Connect(function(...)
-                    print("Event diterima:", child:GetFullName(), ...)
-                end)
-            else
-                print("Event di-blacklist:", child:GetFullName())
-            end
-        elseif child:IsA("Folder") then
-            listenRemotes(child) -- rekursif ke folder anak
+-- Fungsi untuk convert value ke string readable
+local function formatValue(val)
+    if typeof(val) == "Color3" then
+        return string.format("[Color3: R=%.2f G=%.2f B=%.2f]", val.R, val.G, val.B)
+    elseif typeof(val) == "table" then
+        local parts = {}
+        for k,v in pairs(val) do
+            table.insert(parts, string.format("%s = %s", tostring(k), tostring(v)))
         end
+        return "{ " .. table.concat(parts, ", ") .. " }"
+    else
+        return tostring(val)
     end
 end
 
--- Mulai listening dari Remotes
-listenRemotes(Remotes)
+-- Fungsi untuk connect RemoteEvent
+local function connectRemote(remote)
+    if not isBlacklisted(remote) then
+        remote.OnClientEvent:Connect(function(...)
+            local args = {...}
+            print(string.format("[%s] %s", "ReplicatedStorage", remote:GetFullName()))
+            for i, v in ipairs(args) do
+                print(string.format("[%d] = %s", i, formatValue(v)))
+            end
+        end)
+        print("Connected:", remote:GetFullName())
+    else
+        print("Event di-blacklist:", remote:GetFullName())
+    end
+end
+
+-- Fungsi rekursif untuk listen folder
+local function listenFolder(folder)
+    for _, child in ipairs(folder:GetChildren()) do
+        if child:IsA("RemoteEvent") then
+            connectRemote(child)
+        elseif child:IsA("Folder") then
+            listenFolder(child) -- rekursif
+        end
+    end
+
+    folder.ChildAdded:Connect(function(child)
+        if child:IsA("RemoteEvent") then
+            connectRemote(child)
+        elseif child:IsA("Folder") then
+            listenFolder(child) -- rekursif
+        end
+    end)
+end
+
+-- Mulai listening
+listenFolder(Remotes)
